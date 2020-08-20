@@ -1,0 +1,52 @@
+#!/usr/bin/python3
+
+# --- BEGIN COPYRIGHT BLOCK ---
+# Copyright (C) 2020 Simon Pichugin <simon.pichugin@gmail.com>
+# All rights reserved.
+#
+# License: GPL (version 3 or any later version).
+# See LICENSE for details.
+# --- END COPYRIGHT BLOCK ---
+#
+# PYTHON_ARGCOMPLETE_OK
+
+import logging
+import argparse
+import argcomplete
+import sys
+import signal
+import patogith
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-v', '--verbose',
+                    help="Display verbose operation tracing during command execution",
+                    action='store_true', default=False)
+argcomplete.autocomplete(parser)
+
+
+# handle a control-c gracefully
+def signal_handler(signal, frame):
+    print('\n\nExiting...')
+    sys.exit(0)
+
+
+if __name__ == '__main__':
+    log = logging.getLogger("patogith")
+    log_handler = logging.StreamHandler(sys.stdout)
+
+    args = parser.parse_args()
+    if args.verbose:
+        log.setLevel(logging.DEBUG)
+        log_format = '%(levelname)s: %(message)s'
+    else:
+        log.setLevel(logging.INFO)
+        log_format = '%(message)s'
+    log_handler.setFormatter(logging.Formatter(log_format))
+
+    log.debug("Pagure to Github Migration Tool")
+    log.debug("Called with: %s" % args)
+
+    patogith.run()
+
+    if not args.verbose:
+        signal.signal(signal.SIGINT, signal_handler)
