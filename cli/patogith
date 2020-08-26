@@ -21,10 +21,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-v', '--verbose',
                     help="Display verbose operation tracing during command execution",
                     action='store_true', default=False)
-parser.add_argument('-i', '--issue-commit',
-                    help="Commit of the last issue that was migrated")
-parser.add_argument('-p', '--pr-commit',
-                    help="Commit of the last PR that was migrated")
+parser.add_argument('GITHUB_REPO', type=str, nargs='?',
+                    help="GitHub repo in a format user/repo-name (droideck/389-ds-base)")
+parser.add_argument('PAGURE_REPO', type=str, nargs='?',
+                    help="Pagure repo in a format user/repo-name (droideck/389-ds-base)")
 argcomplete.autocomplete(parser)
 
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     log.debug("Pagure to Github Migration Tool")
     log.debug("Called with: %s" % args)
 
-    patogith.run(args)
-
     if not args.verbose:
         signal.signal(signal.SIGINT, signal_handler)
+
+    patogith.run(args)

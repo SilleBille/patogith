@@ -6,32 +6,32 @@
 # See LICENSE for details.
 # --- END COPYRIGHT BLOCK ---
 
-import json
+import getpass
 import urllib.request
-from os import listdir
-from os.path import isfile, join
+from .pagure import fetch_issues, fetch_pull_requests
+from .github import GithubWorker
 
-ISSUES_DIR = "tickets"
-PRS_DIR = "requests"
 REPO_NAME = "389-ds-base"
 
 
 def run(args):
-    issues = [f for f in listdir(ISSUES_DIR) if isfile(join(ISSUES_DIR, f))]
-    prs = [f for f in listdir(PRS_DIR) if isfile(join(PRS_DIR, f))]
-
-    issue_jsons = []
-    for issue in issues:
-        with open(join(ISSUES_DIR, issue)) as f:
-            issue_jsons.append(json.loads(f.read()))
-
-    pr_jsons = []
-    for pr in prs:
-        with open(join(PRS_DIR, pr)) as f:
-            pr_jsons.append(json.loads(f.read()))
-
-    print(pr_jsons[0]['id'])
-    print(issue_jsons[0]['id'])
-    with urllib.request.urlopen(f'https://www.pagure.io/{REPO_NAME}/pull-request/{pr_jsons[0]["id"]}.patch') as f:
-        pr_patch = f.read().decode('utf-8')
-    print(pr_patch)
+    if args.GITHUB_REPO:
+        g_key = getpass.getpass()
+        g = GithubWorker(args.GITHUB_REPO, g_key)
+    issue_jsons = fetch_issues()
+    for issue in issue_jsons:
+        params = {'title': issue["title"],
+                  # Add Opened by NAME at DATE
+                  # Closed as STATUS
+                  'body': issue["content"],
+                  'assignee': issue["assignee"]["name"],
+                  'milestone': issue["milestone"],
+                  'labels': ['bug', 'easy']}
+        comments = []
+        for comment in issue["comments"]:
+            # Add Added by NAME at DATE
+            comments.append({'body': comment["comment"]})
+        comments_params = {'comments': comments}
+        g.ensure_issue(params, comments_params)
+    # Do the same but for PR format and attach PR's patch
+    pr_jsons = fetch_pull_requests()

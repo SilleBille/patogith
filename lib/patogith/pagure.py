@@ -6,27 +6,31 @@
 # See LICENSE for details.
 # --- END COPYRIGHT BLOCK ---
 
-from libpagure import Pagure
+import json
+from os import listdir
+from os.path import isfile, join
+# from libpagure import Pagure
 
-
-def fetch_comments():
-    pass
+ISSUES_DIR = "tickets"
+PRS_DIR = "requests"
 
 
 def fetch_issues():
-    pass
-
-
-def fetch_milestones():
-    pass
-
-
-def fetch_tags():
-    pass
+    issues = [f for f in listdir(ISSUES_DIR) if isfile(join(ISSUES_DIR, f))]
+    issue_jsons = []
+    for issue in issues:
+        with open(join(ISSUES_DIR, issue)) as f:
+            issue_jsons.append(json.loads(f.read()))
+    return issue_jsons
 
 
 def fetch_pull_requests():
-    pass
+    prs = [f for f in listdir(PRS_DIR) if isfile(join(PRS_DIR, f))]
+    pr_jsons = []
+    for pr in prs:
+        with open(join(PRS_DIR, pr)) as f:
+            pr_jsons.append(json.loads(f.read()))
+    return pr_jsons
 
 
 # TODO: 1. Mention the new issue
