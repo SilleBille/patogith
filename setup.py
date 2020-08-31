@@ -61,6 +61,5 @@ setup(
         'argcomplete',
         'argparse-manpage',
         'setuptools',
-        'lazy_object_proxy',
         ],
 )

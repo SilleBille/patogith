@@ -11,4 +11,4 @@ A simple tool for pagure to github migration.
 ## Usage
 `Patogith` is an interactive tool. Simply run it and answer the questions:
 
-    $ patogith
+    $ patogith GITHUB_REPO PAGURE_REPO
