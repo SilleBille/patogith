@@ -13,27 +13,22 @@ class GithubWorker:
     def __init__(self, repo, api_key, log):
         self.api = Github(api_key)
         self.repo = self.api.get_repo(repo)
-        self.issues = self.repo.get_issues()
+        self.issues = self.repo.get_issues(state="all")
         self.milestones = self.repo.get_milestones()
         self.rate_limit = self.api.get_rate_limit()
         self.log = log
-        self.assignees = {
-            "mreynolds": "marcus2376",
-            "mhonek": "kenoh",
-            "spichugi": "droideck",
-            "firstyear": "Firstyear",
-            "tbordaz": "tbordaz",
-        }
 
     def _create_issue(self, params, comments_params, is_closed, ensured_issue=None):
         if "milestone" in params:
             milestone_obj = self.ensure_milestone({"title": params["milestone"]})
             params["milestone"] = milestone_obj
         if ensured_issue is not None:
-            ensured_issue.edit(**params)
+            # ensured_issue.edit(**params)
             issue = ensured_issue
+            self.log.info(f"Issue already exists: {issue}")
         else:
             issue = self.repo.create_issue(**params)
+            self.log.info(f"Issue was created: {issue}")
         if is_closed:
             if issue.state != "closed":
                 issue.edit(state="closed")
@@ -54,11 +49,6 @@ class GithubWorker:
             return milestone
 
     def _create_comment(self, issue, params, ensured_comment=None):
-        if "/389-ds-base/issue/raw/files/" in params["body"]:
-            params["body"] = params["body"].replace(
-                "/389-ds-base/issue/raw/files/",
-                "https://fedorapeople.org/groups/389ds/github_attachments/",
-            )
         if ensured_comment is not None:
             ensured_comment.edit(**params)
             return ensured_comment
@@ -71,6 +61,7 @@ class GithubWorker:
                 issue
                 for issue in self.issues
                 if issue.title.lower() == issue_name.lower()
+                or issue.title.lower() == f"pr - {issue_name.lower()}"
             ][0]
         except IndexError:
             return None
@@ -85,7 +76,9 @@ class GithubWorker:
 
     def find_comment(self, comments, comment_body):
         try:
-            return [c for c in comments if c.body.lower() == comment_body.lower()][0]
+            return [
+                c for c in comments if c.body.lower().endswith(comment_body.lower())
+            ][0]
         except IndexError:
             return None
 
@@ -100,13 +93,9 @@ class GithubWorker:
 
     def ensure_issue(self, params, comments_params, is_closed):
         already_created_issue = self.find_issue(params["title"])
-        if already_created_issue is not None:
-            self.log.info(f"Issue already exists: {already_created_issue}")
-            return already_created_issue
         issue = self._create_issue(
             params, comments_params, is_closed, ensured_issue=already_created_issue
         )
-        self.log.info(f"Issue was created: {issue}")
         return issue
 
     def ensure_milestone(self, params):
