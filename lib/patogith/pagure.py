@@ -9,7 +9,7 @@
 import json
 from os import listdir
 from os.path import isfile, join
-# from libpagure import Pagure
+from libpagure import Pagure
 
 ISSUES_DIR = "tickets"
 PRS_DIR = "requests"
@@ -33,11 +33,19 @@ def fetch_pull_requests():
     return pr_jsons
 
 
-# TODO: 1. Mention the new issue
-#       2. Sanitize ticket description and comments for @references and #references
-def comment_on_issue():
-    pass
+class PagureWorker:
+    def __init__(self, repo, api_key, log):
+        self.api = Pagure(pagure_token=api_key, repo_to=repo)
+        self.log = log
 
+    def comment_on_issue(self, pg_issue_id, gh_issue_id):
+        self.api.comment_issue(self.id, msg)
 
-def comment_on_pull_request():
-    pass
+    def close_issue(self, status=None):
+        if status is None:
+            status = "Fixed"
+
+        self.api.change_issue_status(self.id, "Closed", status)
+
+    def comment_on_pull_request(self, pg_pr_id, gh_issue_id):
+        pass

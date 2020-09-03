@@ -32,6 +32,7 @@ class GithubWorker:
         if is_closed:
             if issue.state != "closed":
                 issue.edit(state="closed")
+        # if ensured_issue is None:
         existent_comments = issue.get_comments()
         for comment in comments_params["comments"]:
             self.ensure_comment(issue, existent_comments, comment)
