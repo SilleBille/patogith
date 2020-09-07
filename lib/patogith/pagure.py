@@ -7,6 +7,7 @@
 # --- END COPYRIGHT BLOCK ---
 
 import json
+import textwrap
 from os import listdir
 from os.path import isfile, join
 from libpagure import Pagure
@@ -39,13 +40,43 @@ class PagureWorker:
         self.log = log
 
     def comment_on_issue(self, pg_issue_id, gh_issue_id):
-        self.api.comment_issue(self.id, msg)
+        msg = textwrap.dedent(
+            f"""
+        389-ds-base is moving from Pagure to Github. This means that new issues and pull requests
+        will be accepted only in [389-ds-base's github repository](https://github.com/389ds/389-ds-base).
 
-    def close_issue(self, status=None):
+        This issue has been cloned to Github and is available here:
+        - https://github.com/389ds/389-ds-base/issues/{gh_issue_id}
+
+        If you want to receive further updates on the issue, please navigate [to the github issue](https://github.com/389ds/389-ds-base/issues/{gh_issue_id})
+        and click on `subscribe` button.
+
+        Thank you for understanding. We apologize for all inconvenience.
+        """
+        ).strip()
+        self.api.comment_issue(pg_issue_id, msg)
+
+    def close_issue(self, pq_issue_id, status=None):
         if status is None:
             status = "Fixed"
-
-        self.api.change_issue_status(self.id, "Closed", status)
+        self.api.change_issue_status(pq_issue_id, "Closed", status)
 
     def comment_on_pull_request(self, pg_pr_id, gh_issue_id):
-        pass
+        msg = textwrap.dedent(
+            f"""
+        389-ds-base is moving from Pagure to Github. This means that new issues and pull requests
+        will be accepted only in [389-ds-base's github repository](https://github.com/389ds/389-ds-base).
+
+        This pull request has been cloned to Github as issue and is available here:
+        - https://github.com/389ds/389-ds-base/issues/{gh_issue_id}
+
+        If you want to continue to work on the PR, please navigate [to the github issue](https://github.com/389ds/389-ds-base/issues/{gh_issue_id}),
+        download the patch from the attachments and file a new pull request.
+
+        Thank you for understanding. We apologize for all inconvenience.
+        """
+        ).strip()
+        self.api.comment_request(pg_pr_id, msg)
+
+    def close_pull_request(self, pg_pr_id):
+        self.api.close_request(pg_pr_id)

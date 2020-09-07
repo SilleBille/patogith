@@ -57,7 +57,7 @@ setup(
     install_requires=[
         'pygithub',
         'libpagure',
-        'bugzilla',
+        'python-bugzilla',
         'argcomplete',
         'argparse-manpage',
         'setuptools',

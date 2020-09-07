@@ -9,13 +9,26 @@
 import bugzilla
 
 
-def fetch_bz_issues():
-    pass
+class BugzillaWorker:
+    def __init__(self, repo, api_key, log):
+        # self.api = bugzilla.Bugzilla("bugzilla.redhat.com", api_key="cvvg8rWB599FQfaYFt9ZsMRljcg10L5fRX5JULPs")
+        self.api = bugzilla.Bugzilla(repo, api_key=api_key)
+        self.log = log
 
+    def update_bugzilla(self, bz_id, pg_issue_id, gh_issue_id):
+        bug = self.api.getbug(bz_id)
+        whiteboard = bug.devel_whiteboard.strip()
+        if f"DS {pg_issue_id}" in whiteboard:
+            whiteboard = whiteboard.replace(f"DS {pg_issue_id}", f"DS {gh_issue_id}")
+        else:
+            if whiteboard:
+                whiteboard = whiteboard + f", DS {gh_issue_id}"
+            else:
+                whiteboard = f"DS {gh_issue_id}"
+        print(f"{whiteboard}")
 
-def fetch_bz_comments():
-    pass
-
-
-def edit_bz_comment():
-    pass
+        update = self.api.build_update(devel_whiteboard=whiteboard)
+        self.api.update_bugs([bz_id], update)
+        self.api.add_external_tracker(
+            bz_id, f"389ds/389-ds-base/issues/{gh_issue_id}", ext_type_id=131
+        )

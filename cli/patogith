@@ -37,6 +37,24 @@ parser.add_argument(
     nargs="?",
     help="Pagure repo in a format user/repo-name (droideck/389-ds-base)",
 )
+parser.add_argument(
+    "-i",
+    "--issues-file",
+    help="File path to store issues info (needed for Stage 2 and Stage 3",
+)
+
+subcommands = parser.add_subparsers(help="action")
+create_gh_parser = subcommands.add_parser(
+    "create-gh-issues", help="Create GitHub issues using Pagure info"
+)
+create_gh_parser.set_defaults(func=patogith.copy_issues)
+update_pagure_parser = subcommands.add_parser(
+    "update-pagure", help="Update Pagure issues"
+)
+update_pagure_parser.set_defaults(func=patogith.update_pagure_issues)
+update_bz_parser = subcommands.add_parser("update-bugzillas", help="Update Bugzillas")
+update_bz_parser.set_defaults(func=patogith.update_bugzillas)
+
 argcomplete.autocomplete(parser)
 
 
@@ -67,4 +85,5 @@ if __name__ == "__main__":
     if not args.verbose:
         signal.signal(signal.SIGINT, signal_handler)
 
-    patogith.run(args, log)
+    if args.func:
+        args.func(args, log)
