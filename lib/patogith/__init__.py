@@ -14,15 +14,38 @@ from .github import GithubWorker
 from .bugzilla import BugzillaWorker
 from github import GithubException
 
+# Write your own nickname list here
 NICKNAME_LIST = {
-    "firstyear": "Firstyear",
-    "lkrispen": "elkris",
-    "mhonek": "kenoh",
     "mreynolds": "marcus2376",
-    "spichugi": "droideck",
+    "lkrispen": "elkris",
     "tbordaz": "tbordaz",
+    "firstyear": "Firstyear",
+    "mhonek": "kenoh",
+    "spichugi": "droideck",
     "vashirov": "vashirov",
+    "nhosoi": "nhosoi",
+    "rmeggins": "richm",
+    "nkinder": "nkinder",
+    "edewata": "edewata",
+    "aborah": "aborah-sudo",
+    "amsharma": "amsharma3",
+    "ilias95": "ilstam",
+    "simo": "simo5",
+    "rcritten": "rcritten",
+    "gparente": "germanparente",
 }
+
+# Write your own label list here
+LABELS = {
+    "fixed": "Closed: Fixed",
+    "invalid": "Closed: Not a bug",
+    "wontfix": "Closed: Won't fix",
+    "duplicate": "Closed: Duplicate",
+    "worksforme": "Closed: Works for me",
+}
+# Make sure to go over the links and modify it according to your needs
+# - copy_issues() - change attachments list
+# - update_bugzillas() - change Bugzilla link
 
 
 def get_bugs(issue):
@@ -45,14 +68,7 @@ def get_closed_labels(issue, is_closed):
     if not is_closed or "close_status" not in issue or issue["close_status"] is None:
         return []
 
-    labels = {
-        "fixed": "Closed: Fixed",
-        "invalid": "Closed: Not a bug",
-        "wontfix": "Closed: Won't fix",
-        "duplicate": "Closed: Duplicate",
-        "worksforme": "Closed: Works for me",
-    }
-    return [labels[issue["close_status"].lower()]]
+    return [LABELS[issue["close_status"].lower()]]
 
 
 def get_labels(issue):
@@ -148,114 +164,150 @@ def wait_for_rate_reset(log, reset_time):
     time.sleep(10)
 
 
+def validate_args(args):
+    if args.github_repo:
+        g_repo = args.github_repo
+    else:
+        g_repo = input("GitHub repo: ")
+
+    if args.issues_file:
+        issues_file = args.issues_file
+    else:
+        issues_file = input("Issue numbers file path: ")
+
+    if args.pagure_repo:
+        p_repo = args.pagure_repo
+    else:
+        p_repo = input("Pagure repo: ")
+
+    return issues_file, g_repo, p_repo
+
+
 def copy_issues(args, log):
-    if args.GITHUB_REPO:
-        g_key = getpass.getpass("GitHub API Key: ")
-        g = GithubWorker(args.GITHUB_REPO, g_key, log)
-    issue_jsons = fetch_issues()
+    issues_file, g_repo, _, = validate_args(args)
+    g_key = getpass.getpass("GitHub API Key: ")
+    g = GithubWorker(g_repo, g_key, log)
+
+    issue_jsons = sorted(
+        fetch_pull_requests() + fetch_issues(), key=lambda b: int(b["id"])
+    )
     for issue in issue_jsons:
         if g.rate_limit.core.remaining < 100:
             wait_for_rate_reset(log, g.rate_limit.core.reset)
-        is_closed = "Closed" in issue["status"]
-        params = {
-            "title": issue["title"],
-            "body": format_description_issue(issue),
-            "labels": get_closed_labels(issue, is_closed) + get_labels(issue),
-        }
-        if issue["milestone"] and issue["milestone"].lower() != "n/a":
-            params["milestone"] = issue["milestone"]
-        comments = []
-        for c in issue["comments"]:
-            comment = cleaup_references(c["comment"])
-            comment = comment.replace(
-                "/389-ds-base/issue/raw/files/",
-                "https://fedorapeople.org/groups/389ds/github_attachments/",
-            )
-            comments.append(
-                {
-                    "body": f"**Comment from {format_user(c['user'])} at "
-                    f"{format_comment_time(issue, c)}**\n\n{comment})"
-                }
-            )
-        comments_params = {"comments": comments}
-        try:
-            issue_gh = g.ensure_issue(params, comments_params, is_closed)
-            bugs = get_bugs(issue)
-            if bugs:
-                bz_numbers = ",".join([b.split("=")[1] for b in bugs])
-            with open(args.issues_file, "a+") as f:
-                f.write(f'i:{issue["id"]}:{issue_gh.number}:{bz_numbers}\n')
-        except GithubException as e:
-            if "blocked from content creation" in str(e):
-                wait_for_rate_reset(log, g.rate_limit.core.reset)
 
-    pr_jsons = fetch_pull_requests()
-    for pr in pr_jsons:
-        if g.rate_limit.core.remaining < 100:
-            wait_for_rate_reset(log, g.rate_limit.core.reset)
-        is_closed = True  # Always close a PR
-        params = {
-            "title": f'PR - {pr["title"]}',
-            "body": format_description_pr(pr),
-            "labels": ["PR", pr["status"]],
-        }
-        comments = []
-        for c in pr["comments"]:
-            comment = cleaup_references(c["comment"])
-            comment = comment.replace(
-                "/389-ds-base/issue/raw/files/",
-                "https://fedorapeople.org/groups/389ds/github_attachments/",
-            )
-            comments.append(
-                {
-                    "body": f"**Comment from {format_user(c['user'])} at "
-                    f"{format_comment_time(pr, c)}**\n\n{comment}"
-                }
-            )
-        comments_params = {"comments": comments}
-        try:
-            issue_gh = g.ensure_issue(params, comments_params, is_closed)
-            with open(args.issues_file, "a+") as f:
-                f.write(f'pr:{pr["id"]}:{issue_gh.number}:\n')
-            existent_comments = issue_gh.get_comments()
-            pr_comment = {
-                "body": f"Patch\n[{pr['id']}.patch](https://fedorapeople.org/groups/389ds/github_attachments/{pr['id']}.patch)"
+        # It is a pull request
+        if "branch" in issue:
+            pr = issue
+
+            is_closed = True  # Always close a PR
+            params = {
+                "title": f'PR - {pr["title"]}',
+                "body": format_description_pr(pr),
+                "labels": ["PR", pr["status"]],
             }
-            g.ensure_comment(issue_gh, existent_comments, pr_comment)
-        except GithubException as e:
-            if "blocked from content creation" in str(e):
-                wait_for_rate_reset(log, g.rate_limit.core.reset)
+            comments = []
+            for c in pr["comments"]:
+                comment = cleaup_references(c["comment"])
+                comment = comment.replace(
+                    "/389-ds-base/issue/raw/files/",
+                    "https://fedorapeople.org/groups/389ds/github_attachments/",
+                )
+                comments.append(
+                    {
+                        "body": f"**Comment from {format_user(c['user'])} at "
+                        f"{format_comment_time(pr, c)}**\n\n{comment}"
+                    }
+                )
+            comments_params = {"comments": comments}
+            try:
+                issue_gh = g.ensure_issue(params, comments_params, is_closed)
+                with open(issues_file, "a+") as f:
+                    f.write(f'pr:{pr["id"]}:{issue_gh.number}:\n')
+                existent_comments = issue_gh.get_comments()
+                pr_comment = {
+                    "body": f"Patch\n[{pr['id']}.patch](https://fedorapeople.org/groups/389ds/github_attachments/{pr['id']}.patch)"
+                }
+                g.ensure_comment(issue_gh, existent_comments, pr_comment)
+            except GithubException as e:
+                if "blocked from content creation" in str(e):
+                    wait_for_rate_reset(log, g.rate_limit.core.reset)
+
+        # It is an issue
+        else:
+            is_closed = "Closed" in issue["status"]
+            params = {
+                "title": issue["title"],
+                "body": format_description_issue(issue),
+                "labels": get_closed_labels(issue, is_closed) + get_labels(issue),
+            }
+            if issue["milestone"] and issue["milestone"].lower() != "n/a":
+                params["milestone"] = issue["milestone"]
+            comments = []
+            for c in issue["comments"]:
+                comment = cleaup_references(c["comment"])
+                comment = comment.replace(
+                    "/389-ds-base/issue/raw/files/",
+                    "https://fedorapeople.org/groups/389ds/github_attachments/",
+                )
+                comments.append(
+                    {
+                        "body": f"**Comment from {format_user(c['user'])} at "
+                        f"{format_comment_time(issue, c)}**\n\n{comment}"
+                    }
+                )
+            comments_params = {"comments": comments}
+            try:
+                issue_gh = g.ensure_issue(params, comments_params, is_closed)
+                bugs = get_bugs(issue)
+                if bugs:
+                    bz_numbers = ",".join([b.split("=")[1] for b in bugs])
+                with open(issues_file, "a+") as f:
+                    f.write(f'i:{issue["id"]}:{issue_gh.number}:{bz_numbers}\n')
+            except GithubException as e:
+                if "blocked from content creation" in str(e):
+                    wait_for_rate_reset(log, g.rate_limit.core.reset)
 
 
 def update_pagure_issues(args, log):
-    if args.PAGURE_REPO:
-        p_key = getpass.getpass("Pagure API Key: ")
-        p = PagureWorker(args.PAGURE_REPO, p_key, log)
-    with open(args.issues_file, "r") as f:
+    issues_file, p_repo, _, = validate_args(args)
+    p_key = getpass.getpass("Pagure API Key: ")
+    p = PagureWorker(p_repo, p_key, log)
+
+    with open(issues_file, "r") as f:
         for line in f.readlines():
-            if line.startswith("i"):
-                pg_issue_id = line.split(":")[0].replace("i", "")
-                gh_issue_id = line.split(":")[1]
-                p.comment_on_issue(pg_issue_id, gh_issue_id)
-                p.close_issue(pq_issue_id, status="wontfix")
-            elif line.startswith("pr"):
-                pg_pr_id = line.split(":")[0].replace("pr", "")
-                gh_issue_id = line.split(":")[1]
-                p.comment_on_pull_request(pg_pr_id, gh_issue_id)
-                p.close_pull_request(pq_issue_id)
+            l_items = line.split(":")
+            if len(l_items) > 1:
+                if line.startswith("i"):
+                    pg_issue_id = l_items[1]
+                    gh_issue_id = l_items[2]
+                    p.comment_on_issue(pg_issue_id, gh_issue_id)
+                    p.close_issue(pg_issue_id, status="wontfix")
+                elif line.startswith("pr"):
+                    pg_pr_id = line.split(":")[0].replace("pr", "")
+                    gh_issue_id = line.split(":")[1]
+                    p.comment_on_pull_request(pg_pr_id, gh_issue_id)
+                    p.close_pull_request(pg_issue_id)
+                else:
+                    log.warning(f"Line {line} has a wrong format and won't be updated")
             else:
                 log.warning(f"Line {line} has a wrong format and won't be updated")
 
 
 def update_bugzillas(args, log):
+    issues_file, _, _, = validate_args(args)
     b_key = getpass.getpass("Bugzilla API Key: ")
     b = BugzillaWorker("bugzilla.redhat.com", b_key, log)
     # b = BugzillaWorker("partner-bugzilla.redhat.com", b_key, log)
-    with open(args.issues_file, "r") as f:
+
+    with open(issues_file, "r") as f:
         for line in f.readlines():
+            bz_ids = []
             if line.startswith("i"):
-                pg_issue_id = line.split(":")[0].replace("i", "")
-                gh_issue_id = line.split(":")[1]
-                bz_ids = line.split(":")[2].split(",")
+                l_items = line.split(":")
+                if len(l_items) > 1:
+                    pg_issue_id = l_items[1]
+                    gh_issue_id = l_items[2]
+                if len(l_items) > 3:
+                    bz_ids = l_items[3].split(",")
                 for bz_id in bz_ids:
                     b.update_bugzilla(bz_id, pg_issue_id, gh_issue_id)

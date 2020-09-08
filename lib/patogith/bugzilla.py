@@ -11,7 +11,6 @@ import bugzilla
 
 class BugzillaWorker:
     def __init__(self, repo, api_key, log):
-        # self.api = bugzilla.Bugzilla("bugzilla.redhat.com", api_key="cvvg8rWB599FQfaYFt9ZsMRljcg10L5fRX5JULPs")
         self.api = bugzilla.Bugzilla(repo, api_key=api_key)
         self.log = log
 

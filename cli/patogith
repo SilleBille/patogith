@@ -26,21 +26,22 @@ parser.add_argument(
     default=False,
 )
 parser.add_argument(
-    "GITHUB_REPO",
-    type=str,
-    nargs="?",
-    help="GitHub repo in a format user/repo-name (droideck/389-ds-base)",
-)
-parser.add_argument(
-    "PAGURE_REPO",
-    type=str,
-    nargs="?",
-    help="Pagure repo in a format user/repo-name (droideck/389-ds-base)",
-)
-parser.add_argument(
     "-i",
     "--issues-file",
     help="File path to store issues info (needed for Stage 2 and Stage 3",
+)
+parser.add_argument(
+    "-g",
+    "--github-repo",
+    type=str,
+    help="GitHub repo in a format user/repo-name (droideck/389-ds-base)",
+)
+parser.add_argument(
+    "-p",
+    "--pagure-repo",
+    type=str,
+    nargs="?",
+    help="Pagure repo in a format user/repo-name (droideck/389-ds-base)",
 )
 
 subcommands = parser.add_subparsers(help="action")
