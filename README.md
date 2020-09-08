@@ -19,4 +19,7 @@ you got to your pagure repository web page (i.e. https://pagure.io/389-ds-base) 
 And then, you can just run the program.
 `Patogith` is an interactive tool. Simply run it and answer the questions:
 
-    $ patogith
+    $ patogith create-gh-issues  # Stage 1. Create GitHub issues using Pagure info
+    $ patogith update-pagure     # Stage 2. Update Pagure issues
+    $ patogith update-bugzillas  # Stage 3. Update Bugzillas
+
