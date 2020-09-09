@@ -154,6 +154,8 @@ def cleaup_references(content):
     for nickname_pg, nickname_gh in NICKNAME_LIST.items():
         content = content.replace(nickname_pg, nickname_gh)
     content = content.replace(" #", " ")
+    content = content.replace("{{{", "```")
+    content = content.replace("}}}", "```")
     return content
 
 

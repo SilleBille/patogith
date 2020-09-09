@@ -1,6 +1,8 @@
 # patogith
 A simple tool for Pagure to GitHub migration.
 
+*Remember to test the process before doing it on production!*
+
 ## Installation
 The library is written with 389-ds-base repository in mind. You need to change a few things to make it work for your repo.
 Please, go to `lib/patogith/__init__.py`, look at the comment section at the top of the file and modify it according to your needs.
@@ -25,4 +27,3 @@ And then, you can just run the program.
     $ patogith update-pagure            # Stage 2. Update Pagure issues
     $ patogith update-bugzillas         # Stage 3. Update Bugzillas
     $ patogith close-unused-milestones  # Stage 4. Close Unused Milestones
-
