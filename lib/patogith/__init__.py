@@ -14,6 +14,24 @@ from .github import GithubWorker
 from .bugzilla import BugzillaWorker
 from github import GithubException
 
+# Write your own milestone list here (lowercase)
+MILESTONE_LIST = [
+    "0.0 needs_triage",
+    "ci test 1.0",
+    "1.3.9",
+    "1.3.10",
+    "1.4.0",
+    "1.4.1",
+    "1.4.2",
+    "1.4.3",
+    "1.4.4",
+    "1.4.5",
+    "1.4 backlog",
+    "2.0.0",
+    "future",
+    "legacy",
+]
+
 # Write your own nickname list here
 NICKNAME_LIST = {
     "mreynolds": "marcus2376",
@@ -311,3 +329,12 @@ def update_bugzillas(args, log):
                     bz_ids = l_items[3].split(",")
                 for bz_id in bz_ids:
                     b.update_bugzilla(bz_id, pg_issue_id, gh_issue_id)
+
+
+def close_unused_milestones(args, log):
+    _, g_repo, _, = validate_args(args)
+    g_key = getpass.getpass("GitHub API Key: ")
+    g = GithubWorker(g_repo, g_key, log)
+    for milestone in g.milestones:
+        if milestone.title.lower() not in MILESTONE_LIST:
+            g.close_milestone(milestone)

@@ -56,6 +56,11 @@ update_pagure_parser.set_defaults(func=patogith.update_pagure_issues)
 update_bz_parser = subcommands.add_parser("update-bugzillas", help="Update Bugzillas")
 update_bz_parser.set_defaults(func=patogith.update_bugzillas)
 
+update_bz_parser = subcommands.add_parser(
+    "close-unused-milestones", help="Close Unused Milestones"
+)
+update_bz_parser.set_defaults(func=patogith.close_unused_milestones)
+
 argcomplete.autocomplete(parser)
 
 

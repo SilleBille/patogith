@@ -120,3 +120,7 @@ class GithubWorker:
         )
         self.log.info(f"Comment was created: {comment}")
         return comment
+
+    def close_milestone(self, milestone):
+        milestone.edit(title=milestone.title, state="closed")
+        self.log.info(f"{milestone.title} was closed")
