@@ -27,7 +27,15 @@ class BugzillaWorker:
         print(f"{whiteboard}")
 
         update = self.api.build_update(devel_whiteboard=whiteboard)
+        update["minor_update"] = True
         self.api.update_bugs([bz_id], update)
-        self.api.add_external_tracker(
-            bz_id, f"389ds/389-ds-base/issues/{gh_issue_id}", ext_type_id=131
-        )
+        param_dict = {
+            "ext_bz_bug_id": f"389ds/389-ds-base/issues/{gh_issue_id}",
+            "ext_type_id": 131,
+        }
+        params = {
+            "bug_ids": [bz_id],
+            "external_bugs": [param_dict],
+            "minor_update": True,
+        }
+        self.api._backend.externalbugs_add(params)

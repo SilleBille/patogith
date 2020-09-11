@@ -34,7 +34,7 @@ MILESTONE_LIST = [
 
 # Write your own nickname list here
 NICKNAME_LIST = {
-    "mreynolds": "marcus2376",
+    "mreynolds": "mreynolds389",
     "lkrispen": "elkris",
     "tbordaz": "tbordaz",
     "firstyear": "Firstyear",
@@ -153,7 +153,19 @@ def format_description_pr(pr):
 def cleaup_references(content):
     for nickname_pg, nickname_gh in NICKNAME_LIST.items():
         content = content.replace(nickname_pg, nickname_gh)
-    content = content.replace(" #", " ")
+    if "#" in content:
+        i = 0
+        while True:
+            try:
+                i = content.index("#", i)
+                try:
+                    # We want to replace only the references to other issues/PRs
+                    int(content[i + 1])
+                    content = content[:i] + content[i + 1:]
+                except ValueError:
+                    i = i + 1
+            except (IndexError, ValueError):
+                break
     content = content.replace("{{{", "```")
     content = content.replace("}}}", "```")
     return content
