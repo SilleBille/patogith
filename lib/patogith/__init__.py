@@ -6,10 +6,12 @@
 # See LICENSE for details.
 # --- END COPYRIGHT BLOCK ---
 
+import os
+import re
 import time
 import datetime
 import getpass
-from .pagure import fetch_issues, fetch_pull_requests, PagureWorker
+from .pagure import PagureWorker
 from .github import GithubWorker
 from .bugzilla import BugzillaWorker
 from github import GithubException
@@ -216,14 +218,32 @@ def validate_args(args):
 
 
 def copy_issues(args, log):
-    issues_file, g_repo, _, = validate_args(args)
+    issues_file, g_repo, p_repo = validate_args(args)
     g_key = getpass.getpass("GitHub API Key: ")
     g = GithubWorker(g_repo, g_key, log)
+    p_key = getpass.getpass("Pagure API Key: ")
+    p = PagureWorker(p_repo, p_key, log)
 
-    issue_jsons = sorted(
-        fetch_pull_requests() + fetch_issues(), key=lambda b: int(b["id"])
-    )
-    for issue in issue_jsons:
+    starting_number = 0
+    last_number = 51300
+    id = starting_number
+    while True:
+        try:
+            issue = p.api.issue_info(id)
+            log.info(f"Issue {id} was found!")
+        except Exception as ex:
+            log.info(ex)
+            try:
+                issue = p.api.request_info(id)
+                log.info(f"PR {id} was found!")
+            except Exception as ex:
+                log.info(ex)
+                id = id + 1
+                if id == last_number:
+                    break
+                else:
+                    continue
+
         if g.rate_limit.core.remaining < 100:
             wait_for_rate_reset(log, g.rate_limit.core.reset)
 
@@ -293,15 +313,18 @@ def copy_issues(args, log):
                 bugs = get_bugs(issue)
                 if bugs:
                     bz_numbers = ",".join([b.split("=")[1] for b in bugs])
+                else:
+                    bz_numbers = ""
                 with open(issues_file, "a+") as f:
                     f.write(f'i:{issue["id"]}:{issue_gh.number}:{bz_numbers}\n')
             except GithubException as e:
                 if "blocked from content creation" in str(e):
                     wait_for_rate_reset(log, g.rate_limit.core.reset)
+        id = id + 1
 
 
 def update_pagure_issues(args, log):
-    issues_file, p_repo, _, = validate_args(args)
+    issues_file, g_repo, p_repo = validate_args(args)
     p_key = getpass.getpass("Pagure API Key: ")
     p = PagureWorker(p_repo, p_key, log)
 
@@ -315,10 +338,10 @@ def update_pagure_issues(args, log):
                     p.comment_on_issue(pg_issue_id, gh_issue_id)
                     p.close_issue(pg_issue_id, status="wontfix")
                 elif line.startswith("pr"):
-                    pg_pr_id = line.split(":")[0].replace("pr", "")
-                    gh_issue_id = line.split(":")[1]
+                    pg_pr_id = l_items[1]
+                    gh_issue_id = l_items[2]
                     p.comment_on_pull_request(pg_pr_id, gh_issue_id)
-                    p.close_pull_request(pg_issue_id)
+                    p.close_pull_request(pg_pr_id)
                 else:
                     log.warning(f"Line {line} has a wrong format and won't be updated")
             else:
@@ -342,7 +365,12 @@ def update_bugzillas(args, log):
                 if len(l_items) > 3:
                     bz_ids = l_items[3].split(",")
                 for bz_id in bz_ids:
-                    b.update_bugzilla(bz_id, pg_issue_id, gh_issue_id)
+                    bz_id = bz_id.replace("\n", "")
+                    try:
+                        int(bz_id)
+                        b.update_bugzilla(bz_id, pg_issue_id, gh_issue_id)
+                    except Exception:
+                        log.info(f"pg = {pg_issue_id}, gh = {gh_issue_id}, bz = {bz_id}")
 
 
 def close_unused_milestones(args, log):
@@ -352,3 +380,150 @@ def close_unused_milestones(args, log):
     for milestone in g.milestones:
         if milestone.title.lower() not in MILESTONE_LIST:
             g.close_milestone(milestone)
+
+
+def check_gh_pg_statuses(args, log):
+    issues_file, g_repo, p_repo = validate_args(args)
+    g_key = getpass.getpass("GitHub API Key: ")
+    g = GithubWorker(g_repo, g_key, log)
+    p_key = getpass.getpass("Pagure API Key: ")
+    p = PagureWorker(p_repo, p_key, log)
+
+    with open(issues_file, "r") as f:
+        i = 0
+        for line in f.readlines():
+            i = i + 1
+            # Start from certain point (line number)
+            #if i < 1366:
+            #    continue
+            l_items = line.split(":")
+            if line.startswith("i"):
+                pg = l_items[1]
+                gh = l_items[2]
+                issue = p.api.issue_info(int(pg))
+                gissue = g.repo.get_issue(int(gh))
+                if issue['status'].lower() == gissue.state.lower():
+                    isok = "yes"
+                else:
+                    isok = "no"
+                log.info(f"pg {pg} - {issue['status']}, gh {gh} - {gissue.state} -- {isok}")
+
+
+def fix_pg_reference_on_gh(args, log):
+    issues_file, g_repo, p_repo = validate_args(args)
+    g_key = getpass.getpass("GitHub API Key: ")
+    g = GithubWorker(g_repo, g_key, log)
+
+    iss = {}
+    prs = {}
+    with open(issues_file, "r") as f:
+        for line in f.readlines():
+            l_items = line.split(":")
+            if len(l_items) > 1:
+                if line.startswith("i"):
+                    pg_issue_id = l_items[1]
+                    gh_issue_id = l_items[2]
+                    iss[pg_issue_id] = gh_issue_id
+                elif line.startswith("pr"):
+                    pg_pr_id = l_items[1]
+                    gh_issue_id = l_items[2]
+                    prs[pg_pr_id] = gh_issue_id
+                else:
+                    log.warning(f"Line {line} has a wrong format and won't be updated")
+            else:
+                log.warning(f"Line {line} has a wrong format and won't be updated")
+
+    for comment in g.repo.get_issues_comments():
+        comment_body = comment.body
+        if len(re.findall("(?P<url>https?://[^\s]+389-ds-base/pull-request/\d+)", comment_body)) > 0:
+            for i_link in re.findall("(?P<url>https?://[^\s]+389-ds-base/pull-request/\d+)", comment_body):
+                if ")**" not in i_link:
+                    log.info(comment_body)
+                    log.info(i_link)
+                    i_link = i_link.replace(")**", "")
+                    i_link = i_link.replace(")", "")
+                    i_link = i_link.replace(",", "")
+                    i_link = i_link.split("#")[0]
+                    try:
+                        comment_body = comment_body.replace(i_link, f"https://github.com/389ds/389-ds-base/pull/{iss[i_link.split('https://pagure.io/389-ds-base/pull-request/')[1]]}")
+                    except KeyError:
+                        int(i_link.split('https://pagure.io/389-ds-base/pull-request/')[1])
+            comment.edit(comment_body)
+        if len(re.findall("(?P<url>https?://[^\s]+389-ds-base/issue/\d+)", comment_body)) > 0:
+            for i_link in re.findall("(?P<url>https?://[^\s]+389-ds-base/issue/\d+)", comment_body):
+                if ")**" not in i_link:
+                    log.info(comment_body)
+                    log.info(i_link)
+                    i_link = i_link.replace(")**", "")
+                    i_link = i_link.replace(")", "")
+                    i_link = i_link.replace(",", "")
+                    i_link = i_link.split("#")[0]
+                    try:
+                        comment_body = comment_body.replace(i_link, f"https://github.com/389ds/389-ds-base/issues/{iss[i_link.split('https://pagure.io/389-ds-base/issue/')[1]]}")
+                    except KeyError:
+                        int(i_link.split('https://pagure.io/389-ds-base/issue/')[1])
+            comment.edit(comment_body)
+
+
+def fix_documentation(args, log):
+    issues_file, g_repo, p_repo = validate_args(args)
+
+    iss = {}
+    prs = {}
+    with open(issues_file, "r") as f:
+        for line in f.readlines():
+            l_items = line.split(":")
+            if len(l_items) > 1:
+                if line.startswith("i"):
+                    pg_issue_id = l_items[1]
+                    gh_issue_id = l_items[2]
+                    iss[pg_issue_id] = gh_issue_id
+                elif line.startswith("pr"):
+                    pg_pr_id = l_items[1]
+                    gh_issue_id = l_items[2]
+                    prs[pg_pr_id] = gh_issue_id
+                else:
+                    log.warning(f"Line {line} has a wrong format and won't be updated")
+            else:
+                log.warning(f"Line {line} has a wrong format and won't be updated")
+
+    # Change the path to your repo
+    for dname, dirs, files in os.walk("/home/spichugi/src/389-ds-base"):
+        for fname in files:
+            fpath = os.path.join(dname, fname)
+            # Set the file extentions you want to fix
+            if fname.endswith(".jsx") or fname.endswith(".c") or fname.endswith(".py") or fname.endswith(".rst"):
+                with open(fpath) as f:
+                    file_content = f.read()
+                if len(re.findall("(?P<url>https?://[^\s]+389-ds-base/pull-request/\d+)", file_content)) > 0:
+                    for i_link in re.findall("(?P<url>https?://[^\s]+389-ds-base/pull-request/\d+)", file_content):
+                        if ")**" not in i_link:
+                            log.info(os.path.join(dname, fname))
+                            log.info(i_link)
+                            i_link = i_link.replace(")**", "")
+                            i_link = i_link.replace(")", "")
+                            i_link = i_link.replace(",", "")
+                            i_link = i_link.split("#")[0]
+                            try:
+                                file_content = file_content.replace(i_link, f"https://github.com/389ds/389-ds-base/pull/{iss[i_link.split('https://pagure.io/389-ds-base/pull-request/')[1]]}")
+                            except KeyError:
+                                int(i_link.split('https://pagure.io/389-ds-base/pull-request/')[1])
+                    with open(fpath, "w") as f:
+                        f.write(file_content)
+                with open(fpath) as f:
+                    file_content = f.read()
+                if len(re.findall("(?P<url>https?://[^\s]+389-ds-base/issue/\d+)", file_content)) > 0:
+                    for i_link in re.findall("(?P<url>https?://[^\s]+389-ds-base/issue/\d+)", file_content):
+                        if ")**" not in i_link:
+                            log.info(os.path.join(dname, fname))
+                            log.info(i_link)
+                            i_link = i_link.replace(")**", "")
+                            i_link = i_link.replace(")", "")
+                            i_link = i_link.replace(",", "")
+                            i_link = i_link.split("#")[0]
+                            try:
+                                file_content = file_content.replace(i_link, f"https://github.com/389ds/389-ds-base/issues/{iss[i_link.split('https://pagure.io/389-ds-base/issue/')[1]]}")
+                            except KeyError:
+                                int(i_link.split('https://pagure.io/389-ds-base/issue/')[1])
+                    with open(fpath, "w") as f:
+                        f.write(file_content)

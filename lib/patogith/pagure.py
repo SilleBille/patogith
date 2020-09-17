@@ -6,32 +6,8 @@
 # See LICENSE for details.
 # --- END COPYRIGHT BLOCK ---
 
-import json
 import textwrap
-from os import listdir
-from os.path import isfile, join
 from libpagure import Pagure
-
-ISSUES_DIR = "tickets"
-PRS_DIR = "requests"
-
-
-def fetch_issues():
-    issues = [f for f in listdir(ISSUES_DIR) if isfile(join(ISSUES_DIR, f))]
-    issue_jsons = []
-    for issue in issues:
-        with open(join(ISSUES_DIR, issue)) as f:
-            issue_jsons.append(json.loads(f.read()))
-    return issue_jsons
-
-
-def fetch_pull_requests():
-    prs = [f for f in listdir(PRS_DIR) if isfile(join(PRS_DIR, f))]
-    pr_jsons = []
-    for pr in prs:
-        with open(join(PRS_DIR, pr)) as f:
-            pr_jsons.append(json.loads(f.read()))
-    return pr_jsons
 
 
 class PagureWorker:
@@ -54,11 +30,13 @@ class PagureWorker:
         Thank you for understanding. We apologize for all inconvenience.
         """
         ).strip()
+        self.log.info(f"Updating issue {pg_issue_id} with {gh_issue_id}")
         self.api.comment_issue(pg_issue_id, msg)
 
     def close_issue(self, pq_issue_id, status=None):
         if status is None:
             status = "Fixed"
+        self.log.info(f"Closing issue {pq_issue_id} with '{status}' status")
         self.api.change_issue_status(pq_issue_id, "Closed", status)
 
     def comment_on_pull_request(self, pg_pr_id, gh_issue_id):
@@ -76,7 +54,9 @@ class PagureWorker:
         Thank you for understanding. We apologize for all inconvenience.
         """
         ).strip()
+        self.log.info(f"Updating PR {pg_pr_id} with {gh_issue_id}")
         self.api.comment_request(pg_pr_id, msg)
 
     def close_pull_request(self, pg_pr_id):
+        self.log.info(f"Closing PR {pg_pr_id}")
         self.api.close_request(pg_pr_id)
